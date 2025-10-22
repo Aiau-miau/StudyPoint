@@ -1,0 +1,185 @@
+/* ------------------------------
+  FULL REPLACEMENT STYLES
+  Paste this replacing everything inside <style> in your Vue file
+  ------------------------------ */
+
+/* Theme tokens (light + dark compatible) */
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --muted: #6b7280;
+  --text: #0b2540;
+  --brand: #1565C0;
+  --accent: #14bf96;
+  --card-radius: 12px;
+  --shadow-soft: 0 10px 30px rgba(11,37,64,0.06);
+  --shadow-subtle: 0 4px 12px rgba(11,37,64,0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1720;
+    --surface: #121318;
+    --muted: #9aa6b2;
+    --text: rgba(255,255,255,0.92);
+    --brand: #7ea7ff;
+    --accent: #33d6a2;
+    --shadow-soft: 0 10px 30px rgba(0,0,0,0.6);
+    --shadow-subtle: 0 4px 12px rgba(255,255,255,0.02);
+  }
+}
+
+/* Reset + base */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #app { height: 100%; }
+body {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.45;
+}
+
+/* Use #app wrapper and highly specific selectors to override other styles */
+#app {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 28px 48px !important;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+/* Main container - desktop-first, full-width */
+#app .container {
+  display: flex !important;
+  gap: 28px;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  background: transparent !important;
+}
+
+/* Left column: fixed width on desktop, roomy */
+#app .left {
+  width: 380px;
+  flex: 0 0 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: transparent;
+}
+
+/* Right column: flexible and fills remaining space */
+#app .right {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: transparent;
+}
+
+/* Card base - apply to inner panels, not container */
+#app .card,
+#app .welcome-section,
+#app .stats-section,
+#app .task-item,
+#app .left-sidebar,
+#app .right-content {
+  background: var(--surface) !important;
+  border-radius: var(--card-radius) !important;
+  padding: 20px !important;
+  border: 1px solid rgba(11,37,64,0.04);
+  box-shadow: var(--shadow-soft);
+  box-sizing: border-box;
+}
+
+/* NAVBAR full width */
+#app .navbar {
+  width: 100% !important;
+  margin: 0 0 20px 0 !important;
+  padding: 12px 20px !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.86));
+  border-radius: 10px;
+  border: 1px solid rgba(11,37,64,0.04);
+  box-shadow: var(--shadow-subtle);
+}
+
+/* Brand & user */
+#app .navbar-brand { font-weight: 800; color: var(--brand); font-size: 20px; }
+#app .logout-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--brand); background: transparent; color: var(--brand); font-weight:700; }
+
+/* Welcome block typography */
+#app .welcome-title { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+#app .welcome-subtitle { color: var(--muted); font-weight: 600; }
+
+/* Stats block */
+#app .stats-title { color: var(--muted); font-weight: 800; font-size: 13px; text-transform: uppercase; margin-bottom: 12px; }
+#app .stat-item { display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px solid rgba(11,37,64,0.03); }
+#app .stat-item:last-child { border-bottom:none; }
+#app .stat-item-value { color: var(--brand); font-weight: 900; }
+
+/* Tasks list - card style items */
+#app .section-title { font-size: 26px; font-weight: 900; }
+#app .task-list { display:flex; flex-direction:column; gap:16px; }
+#app .task-item {
+  display:flex; gap:16px; padding:18px;
+  border-radius:12px; transition: transform .14s ease, box-shadow .14s ease;
+  cursor:pointer;
+}
+#app .task-item:hover { transform: translateY(-6px); box-shadow: 0 18px 40px rgba(11,37,64,0.06); }
+#app .task-icon { width:56px; height:56px; border-radius:10px; display:flex; align-items:center; justify-content:center; background: linear-gradient(135deg,var(--brand),var(--accent)); color:white; font-weight:900; font-size:18px; }
+
+/* Modal / task player layout (centered card) */
+#app .modal { position: fixed; inset: 0; background: rgba(6,10,20,0.5); display:flex; align-items:center; justify-content:center; z-index:9999; }
+#app .modal-container { display:flex; gap:20px; width:94%; max-width:1300px; height:84vh; align-items:stretch; }
+#app .left-sidebar { width:360px; flex:0 0 360px; padding:20px; box-shadow: var(--shadow-soft); }
+#app .right-content { flex:1; padding:26px; overflow:auto; box-shadow: var(--shadow-soft); }
+
+/* Question content */
+#app .question-number-badge { background: var(--brand); color:white; padding:8px 14px; border-radius:999px; font-weight:800; }
+#app .question-text { font-size:22px; font-weight:700; color:var(--text); margin:14px 0; }
+#app .answer-input { width:100%; padding:14px 16px; border-radius:10px; border:1px solid rgba(11,37,64,0.06); font-size:16px; }
+
+/* Feedback */
+#app .feedback-message { margin-top:14px; padding:12px 14px; border-radius:10px; display:flex; gap:12px; align-items:center; font-weight:700; }
+#app .feedback-message.correct { background:#f0fdf9; color:#0d7a5f; border:1px solid #14bf96; }
+#app .feedback-message.wrong { background:#fff5f5; color:#b91c1c; border:1px solid #f87171; }
+
+/* Buttons */
+#app .question-footer { display:flex; justify-content:space-between; align-items:center; padding:18px 24px; background: var(--surface); border-top:1px solid rgba(11,37,64,0.04); border-radius: 0 0 12px 12px; }
+#app .btn { padding:10px 18px; border-radius:10px; font-weight:800; cursor:pointer; border:none; }
+#app .btn-check { background:var(--brand); color:white; }
+#app .btn-next { background:var(--accent); color:white; }
+#app .btn-skip { background:transparent; color:var(--muted); border:1px solid rgba(11,37,64,0.04); }
+
+/* Completion */
+#app .completion-score { font-size:56px; font-weight:900; color:var(--accent); }
+
+/* Responsive: stack on small screens */
+@media (max-width: 1100px) {
+  #app { padding: 18px !important; }
+  #app .left { width: 320px; flex: 0 0 320px; }
+  #app .left-sidebar { width: 300px; flex: 0 0 300px; }
+  #app .modal-container { max-width: 95%; height: 86vh; }
+}
+
+@media (max-width: 880px) {
+  #app { padding: 14px !important; }
+  #app .container { flex-direction: column; gap: 18px; }
+  #app .left, #app .right { width: 100%; flex: none; padding: 16px; }
+  #app .modal-container { flex-direction: column; height: 100vh; width: 100%; padding: 12px; }
+  #app .left-sidebar { width: 100%; border-radius: 12px 12px 0 0; }
+  #app .right-content { width: 100%; border-radius: 0 0 12px 12px; }
+}
+
+/* FORCE-OVERRIDES (only if old styles still win) */
+#app .container, #app .left, #app .right, #app .navbar { all: initial; display: block; } /* fallback if nothing else works - DON'T keep this line permanently */
