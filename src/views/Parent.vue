@@ -19,7 +19,6 @@
 
         <div class="child-card">
           <div class="child-header">
-            <div class="child-avatar">👨‍🎓</div>
             <div class="child-info">
               <div class="child-name">{{ child.firstname }} {{ child.lastname }}</div>
               <div class="child-meta">{{ child.grade }} сынып • Код: {{ child.studentCode }}</div>
@@ -57,7 +56,6 @@
         </div>
 
         <div v-if="allTasks.length === 0" class="empty-state">
-          <div class="empty-icon">🔭</div>
           <div class="empty-text">Әзірше тапсырмалар жоқ</div>
         </div>
 
@@ -82,9 +80,7 @@
               <span :class="'task-status status-' + getTaskStatus(task.id)">
                 {{ getStatusText(getTaskStatus(task.id)) }}
               </span>
-              <div v-if="getTaskGrade(task.id)" class="task-grade">
-                🏆 {{ getTaskGrade(task.id) }}%
-              </div>
+              
               <div class="task-arrow">→</div>
             </div>
           </div>
@@ -98,19 +94,19 @@
         <!-- LEFT SIDEBAR -->
         <div class="left-sidebar">
           <div class="score-section">
-            <div class="score-title">Questions answered</div>
+            <div class="score-title">Дұрыс жауаптар</div>
             <div class="score-value">{{ selectedSubmission ? selectedSubmission.correctAnswers : 0 }}</div>
           </div>
 
           <div class="timer-section">
-            <div class="timer-title">Time spent</div>
+            <div class="timer-title">Уақыт</div>
             <div class="timer-display">
               <div class="timer-value">{{ formatTimeSpent(selectedSubmission ? selectedSubmission.timeSpent : 0) }}</div>
             </div>
           </div>
 
           <div class="smartscore-section">
-            <div class="smartscore-title">SmartScore</div>
+            <div class="smartscore-title">Ұпай</div>
             <div class="smartscore-value">{{ selectedSubmission ? selectedSubmission.grade : 0 }}</div>
             <div class="smartscore-subtitle">out of 100</div>
           </div>
@@ -146,7 +142,7 @@
               </div>
 
               <div class="detail-section">
-                <h3>📋 Тапсырма туралы</h3>
+                <h3>Тапсырма туралы</h3>
                 <div class="detail-row">
                   <span class="detail-label">Атауы</span>
                   <span class="detail-value">{{ selectedTask ? selectedTask.title : '' }}</span>
@@ -159,14 +155,10 @@
                   <span class="detail-label">Қиындық деңгейі</span>
                   <span class="detail-value">{{ selectedTask ? getDifficultyText(selectedTask.difficulty) : '' }}</span>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">Уақыт</span>
-                  <span class="detail-value">{{ selectedTask ? selectedTask.timeLimit + ' минут' : '' }}</span>
-                </div>
               </div>
 
               <div class="detail-section" v-if="selectedSubmission">
-                <h3>📊 Статистика</h3>
+                <h3> Статистика</h3>
                 <div class="detail-row">
                   <span class="detail-label">Жіберілген күні</span>
                   <span class="detail-value">{{ formatDateTime(selectedSubmission.submittedAt) }}</span>
@@ -190,7 +182,6 @@
               </div>
 
               <div v-else class="detail-section" style="text-align: center; padding: 40px;">
-                <div style="font-size: 48px; margin-bottom: 15px;">⏳</div>
                 <div style="font-size: 18px; color: #666; margin-bottom: 10px;">Әзірше орындалмаған</div>
                 <div style="font-size: 14px; color: #999;">Балаңыз бұл тапсырманы әлі орындаған жоқ</div>
               </div>
@@ -210,14 +201,14 @@ export default {
   data() {
     return {
       parent: {
-        firstname: 'Гүлнар',
-        lastname: 'Нұрланова'
+        firstname: '',
+        lastname: ''
       },
       child: {
         id: 1,
-        firstname: 'Айдос',
-        lastname: 'Нұрланов',
-        grade: '4',
+        firstname: '',
+        lastname: '',
+        grade: '',
         studentCode: '123456'
       },
       tasks: [],
@@ -271,8 +262,21 @@ export default {
           console.log('Loaded child info:', this.child);
 
           // Load submissions from API
-          this.submissions = await ApiService.getStudentSubmissions(this.child.id);
-          console.log('Loaded submissions from API:', this.submissions);
+          const rawSubmissions = await ApiService.getStudentSubmissions(this.child.id);
+          console.log('Raw submissions from API:', rawSubmissions);
+          
+          // Normalize submissions to handle both snake_case and camelCase
+          this.submissions = rawSubmissions.map(s => ({
+            id: s.id,
+            student_id: s.student_id || s.studentId,
+            task_id: s.task_id || s.taskId,
+            grade: s.grade,
+            correctAnswers: s.correct_answers || s.correctAnswers || 0,
+            totalQuestions: s.total_questions || s.totalQuestions || 0,
+            timeSpent: s.time_spent || s.timeSpent || 0,
+            submittedAt: s.submitted_at || s.submittedAt || new Date().toISOString()
+          }));
+          console.log('Normalized submissions:', this.submissions);
         }
       } catch (e) {
         console.warn('Failed to load child data from API', e);
@@ -917,10 +921,11 @@ body {
   .dashboard-content { padding: 18px; }
 }
 
+
 @media (max-width: 880px) {
   .dashboard-content { flex-direction: column; padding: 12px; }
-  .left-panel { width: 100%; order: 2; }
-  .right-panel { order: 1; }
+  .left-panel { width: 100%; order: 1; }
+  .right-panel { order: 2; }
   .modal-container { flex-direction: column; }
   .left-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e9eef6; }
   .right-content { width: 100%; }

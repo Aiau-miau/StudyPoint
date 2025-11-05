@@ -8,7 +8,7 @@
       </div>
     </div>
 
-    <div v-if="!showTaskModal" class="dashboard-content">
+    <div v-if="!showTaskModal && !showResultsModal" class="dashboard-content">
       <!-- LEFT PANEL - Statistics -->
       <div class="left-panel">
         <div class="welcome-section">
@@ -20,7 +20,7 @@
           <div class="stats-title">Статистика</div>
           <div class="stat-item">
             <div class="stat-item-label">Барлық тапсырмалар</div>
-            <div class="stat-item-value">{{ availableTasks.length }}</div>
+            <div class="stat-item-value">{{ allTasks.length }}</div>
           </div>
           <div class="stat-item">
             <div class="stat-item-label">Орындалған</div>
@@ -49,13 +49,78 @@
             class="task-item"
             @click="startTask(task)"
           >
-          <div class="lleft"><div class="task-icon">{{ index + 1 }}</div>
-            <div class="task-content">
-              <div class="task-title">{{ task.title }}</div>
-              <div class="task-description">{{ task.description }}</div>
-            </div></div>
-            <div class="rright"><div class="task-arrow">→</div></div>
-            
+            <div class="lleft">
+              <div class="task-icon">{{ index + 1 }}</div>
+              <div class="task-content">
+                <div class="task-title">{{ task.title }}</div>
+                <div class="task-description">{{ task.description }}</div>
+              </div>
+            </div>
+            <div class="rright">
+              <div class="task-arrow">→</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completed Tasks Section -->
+        <div v-if="completedTasks.length > 0" style="margin-top: 40px;">
+          <div class="section-header">
+            <div class="section-title">Орындалған тапсырмалар</div>
+          </div>
+          <div class="task-list">
+            <div
+              v-for="(task, index) in completedTasks"
+              :key="'completed-' + task.id"
+              class="task-item completed-task"
+            >
+              <div class="lleft">
+                <div class="task-icon completed">✓</div>
+                <div class="task-content">
+                  <div class="task-title">{{ task.title }}</div>
+                  <div class="task-description">{{ task.description }}</div>
+                  <div class="task-attempts">
+                    Баға: {{ getLastGrade(task.id) }}%
+                  </div>
+                </div> 
+              </div>
+              <div class="rright">
+                <button @click.stop="viewResults(task)" class="btn-results">
+                  Нәтижелер
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- RESULTS MODAL -->
+    <div v-if="showResultsModal" class="modal">
+      <div class="results-modal-container">
+        <div class="results-header">
+          <div class="results-title">{{ selectedTask.title }} - Нәтижелер</div>
+          <button @click="closeResults" class="close-btn">&times;</button>
+        </div>
+        <div class="results-body">
+          <div class="results-list">
+            <div
+              v-for="(submission, index) in getTaskSubmissions(selectedTask.id)"
+              :key="submission.id"
+              class="result-item"
+            >
+              <div class="result-number">{{ index + 1 }}</div>
+              <div class="result-content">
+                <div class="result-grade">{{ submission.grade }}%</div>
+                <div class="result-details">
+                  <span>{{ submission.correctAnswers }}/{{ submission.totalQuestions }} дұрыс</span>
+                  <span>Уақыт: {{ formatTime(submission.timeSpent) }}</span>
+                  <span>{{ formatDate(submission.submittedAt) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="results-footer">
+            <button @click="closeResults" class="btn btn-next">Жабу</button>
           </div>
         </div>
       </div>
@@ -67,7 +132,7 @@
         <!-- LEFT SIDEBAR -->
         <div class="left-sidebar">
           <div class="score-section">
-            <div class="score-title">Жауап</div>
+            <div class="score-title">Дұрыс жауаптар</div>
             <div class="score-value">{{ questionsAnswered }}</div>
           </div>
 
@@ -120,7 +185,33 @@
                 {{ questions[currentQuestion].text }}
               </div>
 
+              <!-- Multiple Choice Question -->
+              <div v-if="questions[currentQuestion].type === 'multiple-choice'" class="choices-container">
+                <div
+                  v-for="(choice, idx) in questions[currentQuestion].choices"
+                  :key="idx"
+                  class="choice-item"
+                  :class="{
+                    selected: currentAnswer === choice,
+                    correct: questions[currentQuestion].showFeedback && choice === questions[currentQuestion].correctAnswer,
+                    wrong: questions[currentQuestion].showFeedback && currentAnswer === choice && choice !== questions[currentQuestion].correctAnswer,
+                    disabled: questions[currentQuestion].showFeedback
+                  }"
+                  @click="selectChoice(choice)"
+                >
+                  <div class="choice-radio">
+                    <span v-if="!questions[currentQuestion].showFeedback">{{ String.fromCharCode(65 + idx) }}</span>
+                    <span v-else-if="choice === questions[currentQuestion].correctAnswer">✓</span>
+                    <span v-else-if="currentAnswer === choice">✗</span>
+                    <span v-else>{{ String.fromCharCode(65 + idx) }}</span>
+                  </div>
+                  <div class="choice-text">{{ choice }}</div>
+                </div>
+              </div>
+
+              <!-- Text Input Question -->
               <input
+                v-else
                 type="text"
                 class="answer-input"
                 :class="{
@@ -178,7 +269,7 @@
                 v-if="!questions[currentQuestion].showFeedback"
                 @click="checkAnswer"
                 class="btn btn-check"
-                :disabled="!currentAnswer.trim()"
+                :disabled="!currentAnswer || !currentAnswer.toString().trim()"
               >
                 Тексеру
               </button>
@@ -200,8 +291,9 @@ export default {
   name: 'Student',
   data() {
     return {
-      student: { id: null, firstname: 'Оқушы', lastname: '', grade: '–' },
+      student: { id: null, firstname: 'Оқушы', lastname: '', grade: '—' },
       availableTasks: [],
+      allTasks: [],
       submissions: [],
       showTaskModal: false,
       selectedTask: null,
@@ -212,7 +304,8 @@ export default {
       elapsedSeconds: 0,
       timerInterval: null,
       smartScore: 0,
-      questions: []
+      questions: [],
+      showResultsModal: false,
     };
   },
   computed: {
@@ -225,12 +318,33 @@ export default {
     correctAnswers() {
       return this.questions.filter(q => q.answered && q.isCorrect).length;
     },
+    
     completedCount() {
-      return this.submissions.filter(s => s.student_id === this.student.id).length;
+      const uniqueTasks = new Set(
+        this.submissions
+          .filter(s => s.student_id === this.student.id)
+          .map(s => s.task_id)
+      );
+      return uniqueTasks.size;
     },
+
     pendingCount() {
-      return this.availableTasks.length - this.completedCount;
+      return this.availableTasks.length;
     },
+    
+    completedTaskIds() {
+      return new Set(
+        this.submissions
+          .filter(s => s.student_id === this.student.id)
+          .map(s => s.task_id)
+      );
+    },
+    
+    completedTasks() {
+      const completedIds = this.completedTaskIds;
+      return this.allTasks.filter(task => completedIds.has(task.id));
+    },
+    
     averageGrade() {
       const graded = this.submissions.filter(s => s.student_id === this.student.id && s.grade != null);
       if (!graded.length) return 0;
@@ -245,6 +359,65 @@ export default {
     }
   },
   methods: {
+    selectChoice(choice) {
+      if (this.questions[this.currentQuestion].showFeedback) return;
+      this.currentAnswer = choice;
+    },
+
+    getTaskAttempts(taskId) {
+      return this.submissions.filter(
+        s => s.student_id === this.student.id && s.task_id === taskId
+      ).length;
+    },
+
+    getLastGrade(taskId) {
+      const taskSubmissions = this.submissions
+        .filter(s => s.student_id === this.student.id && s.task_id === taskId)
+        .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      
+      return taskSubmissions.length > 0 ? taskSubmissions[0].grade : 0;
+    },
+
+    getTaskSubmissions(taskId) {
+      return this.submissions
+        .filter(s => s.student_id === this.student.id && s.task_id === taskId)
+        .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    },
+
+    formatTime(seconds) {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      const secs = seconds % 60;
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    },
+
+    formatDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleString('kk-KZ', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    },
+
+    viewResults(task) {
+      this.selectedTask = task;
+      this.showResultsModal = true;
+    },
+
+    closeResults() {
+      this.showResultsModal = false;
+      this.selectedTask = null;
+    },
+
+    filterAvailableTasks() {
+      const completedIds = this.completedTaskIds;
+      this.availableTasks = this.allTasks.filter(task => !completedIds.has(task.id));
+      console.log(`Filtered to ${this.availableTasks.length} available tasks (${completedIds.size} completed)`);
+    },
+
     normalizeTask(task) {
       if (!task) return null;
       
@@ -266,22 +439,24 @@ export default {
     startTask(task) {
       if (!task) return;
 
+      if (this.completedTaskIds.has(task.id)) {
+        alert('Бұл тапсырма әлдеқашан орындалған. Қайта орындауға болмайды.');
+        return;
+      }
+
       console.log('=== startTask called ===');
       console.log('Task object:', task);
       console.log('Task fileType:', task.fileType);
       console.log('Task fileContent length:', task.fileContent?.length || 0);
 
-      // preview react uploads in new window
       if (task.fileType === 'react' && task.fileContent) {
         this.openTaskInNewWindow(task);
         return;
       }
 
-      // reset
       this.selectedTask = task;
       this.questions = [];
 
-      // try parse json questions
       if (task.fileType === 'json' && task.fileContent) {
         try {
           console.log('Parsing JSON fileContent...');
@@ -289,15 +464,23 @@ export default {
           console.log('Parsed structure:', parsed);
           
           if (Array.isArray(parsed.questions) && parsed.questions.length) {
-            this.questions = parsed.questions.map(q => ({
-              text: q.text || q.question || '',
-              correctAnswer: String(q.correctAnswer ?? q.answer ?? '').trim(),
-              answer: '',
-              answered: false,
-              isCorrect: false,
-              showFeedback: false
-            }));
+            this.questions = parsed.questions.map(q => {
+              // Detect question type
+              const hasChoices = Array.isArray(q.choices) && q.choices.length > 0;
+              
+              return {
+                text: q.text || q.question || '',
+                type: hasChoices ? 'multiple-choice' : 'text-input',
+                choices: hasChoices ? q.choices : null,
+                correctAnswer: String(q.correctAnswer ?? q.answer ?? '').trim(),
+                answer: '',
+                answered: false,
+                isCorrect: false,
+                showFeedback: false
+              };
+            });
             console.log(`✓ Successfully loaded ${this.questions.length} questions`);
+            console.log('Question types:', this.questions.map(q => q.type));
           } else {
             console.warn('⚠ JSON task has no questions array or it\'s empty');
             console.warn('Parsed object:', parsed);
@@ -315,11 +498,12 @@ export default {
         });
       }
 
-      // ensure at least one placeholder question
       if (!this.questions.length) {
         console.warn('⚠ No questions loaded, creating placeholder');
         this.questions = [{
           text: 'Сұрақ жүктелмеді. Тапсырма файлы дұрыс форматта емес немесе бос.',
+          type: 'text-input',
+          choices: null,
           correctAnswer: '',
           answer: '',
           answered: false,
@@ -328,14 +512,12 @@ export default {
         }];
       }
 
-      // set UI state
       this.showTaskModal = true;
       this.currentQuestion = 0;
       this.currentAnswer = '';
       this.taskCompleted = false;
       this.smartScore = 0;
 
-      // reset question flags
       this.questions.forEach(q => {
         q.answer = q.answer || '';
         q.answered = !!q.answered;
@@ -357,16 +539,15 @@ export default {
     },
 
     checkAnswer() {
-      if (!this.currentAnswer.trim()) return;
+      if (!this.currentAnswer || !this.currentAnswer.toString().trim()) return;
 
-      // if there are no real questions (edge-case), finish gracefully
       if (this.totalQuestions === 0) {
         this.finishTask();
         return;
       }
 
       const q = this.questions[this.currentQuestion];
-      q.answer = this.currentAnswer.trim();
+      q.answer = this.currentAnswer.toString().trim();
       q.answered = true;
       q.isCorrect = q.answer === q.correctAnswer;
       q.showFeedback = true;
@@ -401,20 +582,43 @@ export default {
         grade: this.smartScore,
         correct_answers: this.correctAnswers,
         total_questions: this.totalQuestions,
-        time_spent: this.elapsedSeconds
+        time_spent: this.elapsedSeconds,
+        submitted_at: new Date().toISOString()
       };
 
       try {
         const savedSubmission = await ApiService.createSubmission(submission);
-        this.submissions.push(savedSubmission);
         console.log('Submission saved to API:', savedSubmission);
+        
+        const normalized = {
+          id: savedSubmission.id || Date.now(),
+          student_id: savedSubmission.student_id || savedSubmission.studentId,
+          task_id: savedSubmission.task_id || savedSubmission.taskId,
+          grade: savedSubmission.grade,
+          correctAnswers: savedSubmission.correct_answers || savedSubmission.correctAnswers || 0,
+          totalQuestions: savedSubmission.total_questions || savedSubmission.totalQuestions || 0,
+          timeSpent: savedSubmission.time_spent || savedSubmission.timeSpent || 0,
+          submittedAt: savedSubmission.submitted_at || savedSubmission.submittedAt || new Date().toISOString()
+        };
+        
+        this.submissions.push(normalized);
+        console.log('Normalized submission added:', normalized);
+        
+        this.filterAvailableTasks();
       } catch (e) {
         console.warn('Failed to save submission to API:', e);
         this.submissions.push({
           id: Date.now(),
-          ...submission,
-          submitted_at: new Date().toISOString()
+          student_id: submission.student_id,
+          task_id: submission.task_id,
+          grade: submission.grade,
+          correctAnswers: submission.correct_answers,
+          totalQuestions: submission.total_questions,
+          timeSpent: submission.time_spent,
+          submittedAt: submission.submitted_at
         });
+        
+        this.filterAvailableTasks();
       }
     },
 
@@ -447,7 +651,6 @@ export default {
   async mounted() {
     console.log('=== Student component mounted ===');
     
-    // Load logged-in user
     let raw = null;
     try {
       raw = sessionStorage.getItem('currentUser');
@@ -468,7 +671,6 @@ export default {
       }
     }
 
-    // fallback to window.currentUser
     if (window.currentUser) {
       const u = window.currentUser;
       this.student.id = u.id;
@@ -478,22 +680,19 @@ export default {
       console.log('✓ Loaded student from window.currentUser:', this.student);
     }
 
-    // Load tasks from API
     try {
       console.log('Loading tasks for grade:', this.student.grade);
       const rawTasks = await ApiService.getTasks(this.student.grade);
       console.log('Raw tasks from API:', rawTasks);
       
-      // Normalize tasks
       const taskList = Array.isArray(rawTasks) ? rawTasks : (rawTasks?.data ?? []);
-      this.availableTasks = taskList
+      this.allTasks = taskList
         .map(t => this.normalizeTask(t))
         .filter(t => t !== null);
       
-      console.log(`✓ Loaded ${this.availableTasks.length} tasks`);
+      console.log(`✓ Loaded ${this.allTasks.length} total tasks`);
       
-      // Debug each task
-      this.availableTasks.forEach((task, index) => {
+      this.allTasks.forEach((task, index) => {
         console.log(`Task ${index + 1}: "${task.title}"`);
         console.log(`  - fileType: ${task.fileType}`);
         console.log(`  - hasContent: ${!!task.fileContent}`);
@@ -511,7 +710,6 @@ export default {
       console.error('✗ Failed to load tasks from API:', e);
     }
 
-    // Load submissions
     try {
       if (this.student.id) {
         this.submissions = await ApiService.getStudentSubmissions(this.student.id);
@@ -521,8 +719,11 @@ export default {
       console.warn('Failed to load submissions from API:', e);
     }
     
+    this.filterAvailableTasks();
+    
     console.log('=== Student component mount complete ===');
   }
+  
 };
 </script>
 
@@ -636,11 +837,49 @@ body {
   cursor:pointer;
 }
 .task-item:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(21,101,192,0.08); border-color:#1565C0; }
+.task-item.completed-task { 
+  background: #f7f9fc; 
+  border-color: #d1e0f2;
+  cursor: default;
+}
+.task-item.completed-task:hover { 
+  transform: none; 
+  box-shadow: 0 6px 20px rgba(10, 20, 40, 0.04);
+  border-color: #d1e0f2;
+}
 .task-icon { width:56px; height:56px; border-radius:12px; background:linear-gradient(135deg,#1565C0,#14bf96); color:white; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px; flex-shrink:0; }
+
 .task-title { font-size:18px; font-weight:700; }
 .task-description { font-size:14px; color:#5c677d; margin-top:4px; }
+.task-attempts { 
+  font-size:12px; 
+  color:#1565C0; 
+  margin-top:6px; 
+  font-weight:600; 
+}
 .task-arrow { font-size:24px; color:#1565C0; font-weight:700;}
 .lleft { display:flex; gap:16px; align-items:center; flex:1; }
+.rright { 
+  display:flex; 
+  gap:12px; 
+  align-items:center; 
+}
+
+.btn-results {
+  padding: 8px 16px;
+  background: #f7f8fb;
+  color: #1565C0;
+  border: 1px solid #1565C0;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.18s;
+}
+.btn-results:hover {
+  background: #1565C0;
+  color: white;
+}
 
 .modal {
   position: fixed;
@@ -650,6 +889,92 @@ body {
   display: flex;
   align-items: stretch;
   justify-content: center;
+}
+
+.results-modal-container {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+}
+
+.results-header {
+  padding: 24px 32px;
+  border-bottom: 1px solid #e9eef6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.results-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.results-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.result-item {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: #f7f8fb;
+  border-radius: 10px;
+  border: 1px solid #e9eef6;
+}
+
+.result-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1565C0;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.result-content {
+  flex: 1;
+}
+
+.result-grade {
+  font-size: 24px;
+  font-weight: 800;
+  color: #14bf96;
+  margin-bottom: 8px;
+}
+
+.result-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #6b7586;
+}
+
+.results-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #e9eef6;
 }
 
 .modal-container {
@@ -695,8 +1020,96 @@ body {
 .question-number-badge { background:#1565C0; color:white; padding:8px 18px; border-radius:20px; font-weight:700; display:inline-block; margin-bottom:18px; }
 .question-text { font-size:24px; font-weight:600; margin-bottom:22px; color:#0a2540; }
 
+/* Multiple Choice Styles */
+.choices-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.choice-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 2px solid #eef3f8;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.choice-item:hover:not(.disabled) {
+  border-color: #1565C0;
+  background: #f7f9fc;
+  transform: translateX(4px);
+}
+
+.choice-item.selected:not(.disabled) {
+  border-color: #1565C0;
+  background: #f0f4ff;
+}
+
+.choice-item.correct {
+  border-color: #14bf96;
+  background: #f0fdf9;
+}
+
+.choice-item.wrong {
+  border-color: #ee4444;
+  background: #fff5f5;
+}
+
+.choice-item.disabled {
+  cursor: default;
+}
+
+.choice-radio {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #e9eef6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+  background: white;
+  transition: all 0.2s;
+}
+
+.choice-item.selected:not(.disabled) .choice-radio {
+  border-color: #1565C0;
+  background: #1565C0;
+  color: white;
+}
+
+.choice-item.correct .choice-radio {
+  border-color: #14bf96;
+  background: #14bf96;
+  color: white;
+}
+
+.choice-item.wrong .choice-radio {
+  border-color: #ee4444;
+  background: #ee4444;
+  color: white;
+}
+
+.choice-text {
+  flex: 1;
+  font-size: 16px;
+  color: #0a2540;
+  font-weight: 500;
+}
+
+/* Text Input Styles */
 .answer-input { width:100%; padding:16px 18px; border-radius:10px; border:2px solid #eef3f8; font-size:18px; transition:box-shadow .16s, border-color .16s; }
 .answer-input:focus { outline:none; border-color:#1565C0; box-shadow:0 8px 24px rgba(21,101,192,0.12); }
+.answer-input.correct { border-color: #14bf96; background: #f0fdf9; }
+.answer-input.wrong { border-color: #ee4444; background: #fff5f5; }
 
 .feedback-message { margin-top:18px; padding:16px 20px; border-radius:10px; display:flex; gap:12px; align-items:center; font-size:16px; }
 .feedback-message.correct { background:#f0fdf9; color:#0d7a5f; border:1px solid #14bf96; }
@@ -705,6 +1118,7 @@ body {
 .question-footer { background:white; border-top:1px solid #e9eef6; padding:20px 36px; display:flex; justify-content:space-between; align-items:center; }
 .btn { padding:12px 30px; border-radius:10px; font-weight:700; cursor:pointer; font-size:15px; border:none; transition:all .16s; }
 .btn-check { background:#1565C0; color:white; }
+.btn-check:disabled { background:#ccc; cursor:not-allowed; opacity:0.6; }
 .btn-next { background:#14bf96; color:white; }
 .btn-skip { background:#f7f8fb; color:#6b7586; border:1px solid #eef3f8; }
 

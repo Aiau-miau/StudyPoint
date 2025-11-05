@@ -4,7 +4,7 @@
     <div class="navbar">
       <div class="navbar-brand">StudyPoint Admin</div>
       <div style="display: flex; align-items: center; gap: 20px;">
-        <span style="font-weight: 600; color: #0a2540; font-size: 14px;">Мұғалім</span>
+        <span style="font-weight: 600; color: #0a2540; font-size: 14px;">{{ teacherName || 'Мұғалім' }}</span>
         <button @click="logout" class="logout-btn">Шығу</button>
       </div>
     </div>
@@ -12,11 +12,17 @@
     <div class="ddashboard-content">
       <div class="welcome-card">
         <h2>Сәлем, {{ teacherName || 'Құрметті мұғалім' }}!</h2>
-        <p>React компоненттері немесе JSON файлдарын жүктеңіз</p>
+        <p>Word файлдарынан сұрақтарды автоматты түрде жүктеңіз</p>
+      </div>
+
+      <div v-if="!isAuthenticated" class="warning-message">
+        <span>⚠️</span>
+        <span>Аутентификация жоқ! Жүйеге кіруіңіз керек.</span>
+        <button @click="redirectToLogin" class="btn-primary" style="margin-left: auto;">Кіру</button>
       </div>
 
       <div v-if="successMessage" class="success-message">
-        <span>✓</span>
+        <span>✔</span>
         <span>{{ successMessage }}</span>
       </div>
       <div v-if="errorMessage" class="error-message">
@@ -26,11 +32,10 @@
 
       <div class="info-box">
         <div class="info-box-title">
-          <span>ℹ️</span>
           <span>Нұсқаулық</span>
         </div>
         <div class="info-box-content">
-          <strong>React компоненті:</strong> .jsx, .js файлдарын жүктеңіз (интерактив тапсырмалар)<br />
+          <strong>Word файлдары:</strong> .docx файлдарын жүктеңіз (сұрақтар нөмірленуі керек: 1., 2., 3.)<br />
           <strong>JSON конфигурация:</strong> Тапсырма параметрлері бар .json файлын жүктеңіз<br />
           <strong>Назар:</strong> Файл жүктелгеннен кейін, ол оқушыларға қолжетімді болады
         </div>
@@ -39,7 +44,9 @@
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">Жаңа тапсырма жүктеу</h3>
-          <button @click="showUploadModal = true" class="btn-primary">+ Тапсырма қосу</button>
+          <button @click="openUploadModal" class="btn-primary" :disabled="!isAuthenticated">
+            + Тапсырма қосу
+          </button>
         </div>
 
         <div v-if="tasks.length === 0" class="empty-state">
@@ -52,7 +59,7 @@
               <div class="task-card-title">{{ task.title }}</div>
               <div>
                 <span :class="'task-badge badge-' + (task.fileType || 'json')">
-                  {{ (task.fileType === 'react' ? 'React' : (task.fileType === 'json' ? 'JSON' : task.fileType)) }}
+                  {{ (task.fileType === 'word' ? 'Word' : (task.fileType === 'json' ? 'JSON' : task.fileType)) }}
                 </span>
                 <span class="task-badge badge-grade">{{ task.grade }} сынып</span>
               </div>
@@ -63,7 +70,7 @@
                 📄 {{ task.fileName }}<br />
                 📅 {{ task.uploadDate }}
               </div>
-              <button @click="deleteTask(task)" class="delete-btn">Жою</button>
+              <button @click="deleteTask(task)" class="delete-btn" :disabled="!isAuthenticated">Жою</button>
             </div>
           </div>
         </div>
@@ -82,18 +89,18 @@
           <div class="upload-type-selector">
             <div
               class="upload-type-btn"
-              :class="{ active: uploadType === 'react' }"
-              @click.prevent="setUploadType('react')"
+              :class="{ active: uploadType === 'word' }"
+              @click.prevent="setUploadType('word')"
             >
-              <div class="upload-type-title">React компоненті</div>
-              <div class="upload-type-desc">Интерактивті тапсырма (.jsx, .js)</div>
+              <div class="upload-type-title">📄 Word документ</div>
+              <div class="upload-type-desc">Сұрақтары бар .docx файл</div>
             </div>
             <div
               class="upload-type-btn"
               :class="{ active: uploadType === 'json' }"
               @click.prevent="setUploadType('json')"
             >
-              <div class="upload-type-title">JSON файл</div>
+              <div class="upload-type-title">📋 JSON файл</div>
               <div class="upload-type-desc">Конфигурация файлы (.json)</div>
             </div>
           </div>
@@ -113,7 +120,7 @@
               type="file"
               ref="fileInput"
               @change="handleFileSelect"
-              :accept="uploadType === 'react' ? '.js,.jsx' : '.json'"
+              :accept="uploadType === 'word' ? '.docx' : '.json'"
               style="display: none;"
             />
           </div>
@@ -128,7 +135,25 @@
             <button type="button" @click="removeFile" class="remove-file-btn">Жою</button>
           </div>
 
-          <div v-if="fileContent" class="code-preview">
+          <!-- Word Preview -->
+          <div v-if="uploadType === 'word' && parsedQuestions.length > 0" class="word-preview">
+            <div class="preview-header">
+              <strong>Табылған сұрақтар: {{ parsedQuestions.length }}</strong>
+            </div>
+            <div class="preview-list">
+              <div v-for="(q, idx) in parsedQuestions.slice(0, 3)" :key="idx" class="preview-item">
+                <div class="preview-number">{{ idx + 1 }}</div>
+                <div class="preview-text">{{ q.text.substring(0, 100) }}{{ q.text.length > 100 ? '...' : '' }}</div>
+                <div v-if="q.hasImage" class="preview-badge">🖼️ Сурет</div>
+              </div>
+              <div v-if="parsedQuestions.length > 3" class="preview-more">
+                + тағы {{ parsedQuestions.length - 3 }} сұрақ
+              </div>
+            </div>
+          </div>
+
+          <!-- JSON Preview -->
+          <div v-if="uploadType === 'json' && fileContent" class="code-preview">
             {{ fileContent.substring(0, 500) }}...
           </div>
 
@@ -180,7 +205,9 @@
             </div>
           </div>
 
-          <button type="submit" class="submit-btn" :disabled="!uploadedFile || !newTask.title">Жүктеу және сақтау</button>
+          <button type="submit" class="submit-btn" :disabled="!uploadedFile || !newTask.title || !isAuthenticated || isProcessing">
+            {{ isProcessing ? 'Өңделуде...' : 'Жүктеу және сақтау' }}
+          </button>
         </form>
       </div>
     </div>
@@ -188,6 +215,7 @@
 </template>
 
 <script>
+// Mammoth.js will be loaded globally from index.html
 import ApiService from '../services/api.js';
 
 export default {
@@ -195,14 +223,17 @@ export default {
   data() {
     return {
       showUploadModal: false,
-      uploadType: 'react',
+      uploadType: 'word',
       uploadedFile: null,
       fileContent: '',
+      parsedQuestions: [],
       isDragging: false,
       successMessage: '',
       errorMessage: '',
       teacherName: '',
       rawUser: null,
+      isAuthenticated: false,
+      isProcessing: false,
       newTask: {
         title: '',
         description: '',
@@ -215,7 +246,34 @@ export default {
     };
   },
   methods: {
-    // Normalize server task -> client task shape
+    checkAuthentication() {
+      const token = ApiService.getToken()
+      this.isAuthenticated = !!token
+      console.log('Authentication status:', this.isAuthenticated ? '✓ Authenticated' : '✗ Not authenticated')
+      
+      if (!this.isAuthenticated) {
+        this.showError('Аутентификация жоқ! Жүйеге кіруіңіз керек.')
+      }
+      
+      return this.isAuthenticated
+    },
+
+    redirectToLogin() {
+      if (this.$router) {
+        this.$router.push('/').catch(() => {})
+      } else {
+        window.location.href = '/'
+      }
+    },
+
+    openUploadModal() {
+      if (!this.checkAuthentication()) {
+        this.showError('Тапсырма жүктеу үшін жүйеге кіруіңіз керек!')
+        return
+      }
+      this.showUploadModal = true
+    },
+
     normalizeTask(serverTask = {}) {
       return {
         id: serverTask.id ?? serverTask._id ?? serverTask.taskId ?? null,
@@ -235,7 +293,6 @@ export default {
     setUploadType(type) {
       if (this.uploadType !== type) {
         this.uploadType = type;
-        // clear currently chosen file when switching type
         this.removeFile();
       }
     },
@@ -257,23 +314,130 @@ export default {
       }
     },
 
-    processFile(file) {
+    async processFile(file) {
       console.log('processFile called, uploadType:', this.uploadType, 'file:', file);
-      const validExtensions = this.uploadType === 'react' ? ['.js', '.jsx'] : ['.json'];
-      const fileExt = '.' + file.name.split('.').pop().toLowerCase();
-      if (!validExtensions.includes(fileExt)) {
-        this.showError('Қате файл түрі! ' + validExtensions.join(', ') + ' файлдарын жүктеңіз');
-        return;
+      
+      if (this.uploadType === 'word') {
+        const validExtensions = ['.docx'];
+        const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+        if (!validExtensions.includes(fileExt)) {
+          this.showError('Қате файл түрі! .docx файлдарын жүктеңіз');
+          return;
+        }
+        
+        this.uploadedFile = file;
+        this.isProcessing = true;
+        
+        try {
+          await this.parseWordFile(file);
+          this.showSuccess(`${this.parsedQuestions.length} сұрақ табылды!`);
+        } catch (error) {
+          console.error('Word parse error:', error);
+          this.showError('Word файлын оқу кезінде қате орын алды: ' + error.message);
+          this.removeFile();
+        } finally {
+          this.isProcessing = false;
+        }
+      } else {
+        // JSON file
+        const validExtensions = ['.json'];
+        const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+        if (!validExtensions.includes(fileExt)) {
+          this.showError('Қате файл түрі! .json файлдарын жүктеңіз');
+          return;
+        }
+        
+        this.uploadedFile = file;
+        const reader = new FileReader();
+        reader.onload = (e) => { 
+          this.fileContent = e.target.result || ''; 
+        };
+        reader.readAsText(file);
       }
-      this.uploadedFile = file;
-      const reader = new FileReader();
-      reader.onload = (e) => { this.fileContent = e.target.result || ''; };
-      reader.readAsText(file);
+    },
+
+    async parseWordFile(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+      
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(result.value, 'text/html');
+      
+      this.parsedQuestions = this.extractQuestions(doc);
+      
+      if (this.parsedQuestions.length === 0) {
+        throw new Error('Файлда сұрақтар табылмады. Сұрақтар нөмірленгенін тексеріңіз (1., 2., 3.)');
+      }
+      
+      // Convert to JSON format for storage
+      const jsonContent = {
+        questions: this.parsedQuestions.map(q => ({
+          text: q.text,
+          type: q.type,
+          choices: q.choices,
+          correctAnswer: q.correctAnswer
+        }))
+      };
+      
+      this.fileContent = JSON.stringify(jsonContent, null, 2);
+    },
+
+    extractQuestions(doc) {
+      const questions = [];
+      const content = doc.body.textContent || '';
+      
+      // Method 1: Try numbered pattern (1. 2. 3. or 1) 2) 3))
+      const questionPattern = /(?:^|\n)\s*(\d+)[.)]\s*(.+?)(?=\n\s*\d+[.)]|\s*$)/gs;
+      const matches = [...content.matchAll(questionPattern)];
+      
+      if (matches.length > 0) {
+        matches.forEach((match) => {
+          const questionText = match[2].trim();
+          if (questionText.length > 5) {
+            questions.push({
+              text: questionText,
+              type: 'text-input',
+              choices: null,
+              correctAnswer: '',
+              hasImage: false
+            });
+          }
+        });
+      } else {
+        // Method 2: Split by paragraphs
+        const paragraphs = doc.querySelectorAll('p');
+        paragraphs.forEach((p) => {
+          const text = p.textContent.trim();
+          if (text.length > 10) {
+            questions.push({
+              text: text,
+              type: 'text-input',
+              choices: null,
+              correctAnswer: '',
+              hasImage: false
+            });
+          }
+        });
+      }
+      
+      // Try to detect images
+      const images = doc.querySelectorAll('img');
+      if (images.length > 0) {
+        images.forEach((img, index) => {
+          if (questions[index]) {
+            questions[index].hasImage = true;
+            questions[index].imageUrl = img.src;
+          }
+        });
+      }
+      
+      return questions;
     },
 
     removeFile() {
       this.uploadedFile = null;
       this.fileContent = '';
+      this.parsedQuestions = [];
       if (this.$refs.fileInput) {
         try { this.$refs.fileInput.value = ''; } catch (e) { /* ignore */ }
       }
@@ -286,17 +450,23 @@ export default {
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     },
 
-    // Try to upload JSON payload first; if server expects multipart, retry with FormData
     async uploadTask() {
+      if (!this.checkAuthentication()) {
+        this.showError('Тапсырма жүктеу үшін жүйеге кіруіңіз керек!');
+        return;
+      }
+
       if (!this.uploadedFile || !this.newTask.title) {
         this.showError('Барлық міндетті өрістерді толтырыңыз!');
         return;
       }
 
+      this.isProcessing = true;
+
       const payloadJson = {
         ...this.newTask,
         file_name: this.uploadedFile.name,
-        file_type: this.uploadType,
+        file_type: this.uploadType === 'word' ? 'json' : this.uploadType, // Store as JSON
         file_content: this.fileContent,
         upload_date: new Date().toLocaleDateString('kk-KZ')
       };
@@ -304,7 +474,6 @@ export default {
       console.log('Attempting createTask with JSON payload:', payloadJson);
       try {
         let res = await ApiService.createTask(payloadJson);
-        // handle axios-like responses
         const created = res?.data ?? res;
         if (!created) throw new Error('No task returned from API');
 
@@ -312,43 +481,28 @@ export default {
         this.tasks.push(normalized);
         this.showSuccess('Тапсырма сәтті жүктелді!');
         this.closeUploadModal();
-        return;
       } catch (err) {
-        console.warn('createTask JSON failed, will try multipart if applicable. Error:', err);
-        // If JSON failed, attempt multipart/form-data as fallback
-      }
-
-      // --- fallback to FormData upload (some backends expect real file upload) ---
-      try {
-        const form = new FormData();
-        form.append('title', this.newTask.title);
-        form.append('description', this.newTask.description);
-        form.append('subject', this.newTask.subject || '');
-        form.append('grade', this.newTask.grade || '');
-        form.append('difficulty', this.newTask.difficulty || 'medium');
-        form.append('timeLimit', this.newTask.timeLimit ?? 15);
-        form.append('file_type', this.uploadType);
-        form.append('file', this.uploadedFile); // send real file
-        form.append('upload_date', new Date().toISOString());
-
-        console.log('Attempting createTask with FormData, keys:', Array.from(form.keys()));
-        const res2 = await ApiService.createTask(form, { isForm: true }); // note: ApiService must forward headers accordingly
-        const created2 = res2?.data ?? res2;
-        if (!created2) throw new Error('No task returned from API (form-data)');
-
-        const normalized2 = this.normalizeTask(created2);
-        this.tasks.push(normalized2);
-        this.showSuccess('Тапсырма сәтті жүктелді!');
-        this.closeUploadModal();
-        return;
-      } catch (err2) {
-        console.error('FormData upload also failed:', err2);
-        this.showError('Тапсырма жүктеу кезінде қате орын алды: ' + (err2?.message || err2));
+        console.error('Task creation failed:', err);
+        
+        if (err.message && err.message.includes('Authentication')) {
+          this.isAuthenticated = false;
+          this.showError('Сессия аяқталды. Қайта кіруіңіз керек!');
+          setTimeout(() => this.redirectToLogin(), 2000);
+          return;
+        }
+        
+        this.showError('Тапсырма жүктеу кезінде қате орын алды: ' + (err?.message || err));
+      } finally {
+        this.isProcessing = false;
       }
     },
 
-    // Accept either task object or id; will delete on server and remove from UI
     async deleteTask(taskOrId) {
+      if (!this.checkAuthentication()) {
+        this.showError('Тапсырма жою үшін жүйеге кіруіңіз керек!');
+        return;
+      }
+
       const task = typeof taskOrId === 'object' ? taskOrId : null;
       const id = task ? (task.id ?? task._id ?? task.taskId) : taskOrId;
 
@@ -356,16 +510,23 @@ export default {
         this.showError('Жою үшін жарамды идентификатор табылмады.');
         return;
       }
-      if (!confirm('Тапсырманы жоюды қалайсыз ба?')) return;
+      if (!confirm('Тапсырманы жойуды қалайсыз ба?')) return;
 
       try {
         console.log('Deleting task id:', id);
         await ApiService.deleteTask(id);
-        // remove from local list by possible id fields
         this.tasks = this.tasks.filter(t => (t.id ?? t._id ?? t.taskId) !== id);
         this.showSuccess('Тапсырма жойылды');
       } catch (error) {
         console.error('Delete error:', error);
+        
+        if (error.message && error.message.includes('Authentication')) {
+          this.isAuthenticated = false;
+          this.showError('Сессия аяқталды. Қайта кіруіңіз керек!');
+          setTimeout(() => this.redirectToLogin(), 2000);
+          return;
+        }
+        
         this.showError('Тапсырма жою кезінде қате орын алды: ' + (error?.message || error));
       }
     },
@@ -390,13 +551,18 @@ export default {
 
     logout() {
       if (confirm('Шығуды қалайсыз ба?')) {
+        ApiService.clearToken();
+        this.isAuthenticated = false;
         if (this.$router) this.$router.push('/').catch(()=>{}); else window.location.href = '/';
       }
     }
   },
 
   async mounted() {
-    // Load user info
+    console.log('=== Admin component mounted ===');
+    
+    this.checkAuthentication();
+
     try {
       const sessionRaw = sessionStorage.getItem('currentUser');
       if (sessionRaw) this.rawUser = JSON.parse(sessionRaw);
@@ -409,22 +575,32 @@ export default {
       this.teacherName = name;
     }
 
-    // Load tasks
-    try {
-      const raw = await ApiService.getTasks();
-      const list = Array.isArray(raw) ? raw : (raw?.data ?? []);
-      this.tasks = list.map(t => this.normalizeTask(t));
-      console.log('Loaded tasks from API:', this.tasks);
-    } catch (e) {
-      console.warn('Failed to load tasks from API:', e);
-      this.showError('Тапсырмаларды жүктеу кезінде қате орын алды');
+    if (this.isAuthenticated) {
+      try {
+        const raw = await ApiService.getTasks();
+        const list = Array.isArray(raw) ? raw : (raw?.data ?? []);
+        this.tasks = list.map(t => this.normalizeTask(t));
+        console.log('✓ Loaded tasks from API:', this.tasks.length);
+      } catch (e) {
+        console.error('✗ Failed to load tasks from API:', e);
+        
+        if (e.message && e.message.includes('Authentication')) {
+          this.isAuthenticated = false;
+          this.showError('Сессия аяқталды. Қайта кіруіңіз керек!');
+        } else {
+          this.showError('Тапсырмаларды жүктеу кезінде қате орын алды');
+        }
+      }
+    } else {
+      this.showError('Тапсырмаларды көру үшін жүйеге кіруіңіз керек!');
     }
+    
+    console.log('=== Admin component mount complete ===');
   }
 };
 </script>
 
 <style>
-/* (һ) — оригинал стильдеріңді сол қалпында қолдандым — қажет болса кейін оңтайландырсақ болады */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f7f8fa; min-height: 100vh; }
 .navbar { background: white; padding: 12px 24px; border-bottom: 1px solid #e5e5e5; display: flex; justify-content: space-between; align-items: center; }
@@ -439,7 +615,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .card-title { font-size: 20px; font-weight: 700; color: #0a2540; }
 .btn-primary { background: #1565C0; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; }
-.btn-primary:hover { background: #0d47a1; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24, 101, 242, 0.3); }
+.btn-primary:hover:not(:disabled) { background: #0d47a1; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24, 101, 242, 0.3); }
+.btn-primary:disabled { background: #ccc; cursor: not-allowed; opacity: 0.6; }
 .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
 .modal-content { background: white; padding: 32px; border-radius: 12px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #e5e5e5; }
@@ -466,6 +643,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .file-size { font-size: 12px; color: #697386; }
 .remove-file-btn { background: #ee4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
 .remove-file-btn:hover { background: #cc3333; }
+.word-preview { background: #f7f9fc; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e5e5; }
+.preview-header { font-size: 15px; color: #0a2540; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e5e5e5; }
+.preview-list { display: flex; flex-direction: column; gap: 12px; }
+.preview-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px; background: white; border-radius: 6px; border: 1px solid #e5e5e5; }
+.preview-number { width: 32px; height: 32px; border-radius: 50%; background: #1565C0; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+.preview-text { flex: 1; font-size: 14px; color: #0a2540; line-height: 1.5; }
+.preview-badge { background: #14bf96; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.preview-more { text-align: center; padding: 12px; color: #697386; font-size: 14px; font-style: italic; }
 .code-preview { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; max-height: 250px; overflow: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; margin-bottom: 20px; }
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; margin-bottom: 8px; color: #0a2540; font-weight: 600; font-size: 14px; }
@@ -474,7 +659,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .form-group textarea { min-height: 100px; resize: vertical; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .submit-btn { width: 100%; padding: 14px; background: #1565C0; color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.submit-btn:hover { background: #0d47a1; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24, 101, 242, 0.3); }
+.submit-btn:hover:not(:disabled) { background: #0d47a1; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24, 101, 242, 0.3); }
 .submit-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; opacity: 0.6; }
 .task-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 20px; }
 .task-card { background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 20px; transition: all 0.2s; }
@@ -482,19 +667,27 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .task-card-header { margin-bottom: 12px; }
 .task-card-title { font-size: 16px; font-weight: 600; color: #0a2540; margin-bottom: 8px; }
 .task-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-.badge-react { background: #e3f2fd; color: #1976d2; }
+.badge-word { background: #e3f2fd; color: #1976d2; }
 .badge-json { background: #fff9c4; color: #f57f17; }
 .badge-grade { background: #f0f4ff; color: #1565C0; }
 .task-card-desc { color: #697386; font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
 .task-card-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid #f0f0f0; }
 .task-meta { font-size: 11px; color: #999; }
 .delete-btn { background: #ee4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; }
-.delete-btn:hover { background: #cc3333; }
+.delete-btn:hover:not(:disabled) { background: #cc3333; }
+.delete-btn:disabled { background: #ccc; cursor: not-allowed; opacity: 0.6; }
 .success-message { background: #e8f5e9; color: #2e7d32; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50; display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .error-message { background: #ffebee; color: #c62828; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f44336; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.warning-message { background: #fff3e0; color: #e65100; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800; display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .empty-state { text-align: center; padding: 60px 20px; color: #697386; }
 .empty-state-text { font-size: 15px; }
 .info-box { background: #f0f4ff; padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #1565C0; }
 .info-box-title { font-weight: 600; color: #0d47a1; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .info-box-content { font-size: 13px; color: #555; line-height: 1.6; }
+@media (max-width: 768px) {
+  .modal-content { padding: 20px; }
+  .upload-type-selector { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .task-grid { grid-template-columns: 1fr; }
+}
 </style>
