@@ -184,6 +184,17 @@
               <div class="question-text">
                 {{ questions[currentQuestion].text }}
               </div>
+              <!-- IMAGE DISPLAY -->
+<div v-if="questions[currentQuestion] && questions[currentQuestion].imageUrl" class="question-image-container">
+  <img 
+  :src="questions[currentQuestion].imageUrl" 
+  :alt="`Question ${currentQuestion + 1} image`"
+  class="question-image"
+  @error="onImgError"
+  loading="lazy"
+/>
+</div>
+
 
               <!-- Multiple Choice Question -->
               <div v-if="questions[currentQuestion].type === 'multiple-choice'" class="choices-container">
@@ -363,6 +374,11 @@ export default {
       if (this.questions[this.currentQuestion].showFeedback) return;
       this.currentAnswer = choice;
     },
+    onImgError(e) {
+  console.warn("Image failed to load:", e.target.src);
+  e.target.style.display = "none";
+},
+
 
     getTaskAttempts(taskId) {
       return this.submissions.filter(
@@ -425,6 +441,7 @@ export default {
         id: task.id ?? task._id ?? task.taskId ?? null,
         title: task.title ?? task.name ?? '',
         description: task.description ?? task.desc ?? '',
+        imageUrl: task.imageUrl ?? task.image_url ?? '',
         subject: task.subject ?? '',
         grade: task.grade ?? '',
         difficulty: task.difficulty ?? task.level ?? 'medium',
@@ -473,6 +490,7 @@ export default {
                 type: hasChoices ? 'multiple-choice' : 'text-input',
                 choices: hasChoices ? q.choices : null,
                 correctAnswer: String(q.correctAnswer ?? q.answer ?? '').trim(),
+                imageUrl: q.imageUrl ?? q.image_url ?? q.image ?? '',
                 answer: '',
                 answered: false,
                 isCorrect: false,
@@ -1124,6 +1142,10 @@ body {
 
 .completion-screen { text-align:center; padding:72px 40px; }
 .completion-score { font-size:64px; color:#14bf96; font-weight:900; margin:24px 0; }
+.question-image { width: 100%; max-width: 720px; height: auto; display: block; border-radius: 8px; margin: 8px 0; }
+.img-error { opacity: 0.6; filter: grayscale(30%); }
+.question-image-container { display:flex; justify-content:center; }
+
 
 @media (max-width: 1100px) {
   .left-panel { width: 300px; }

@@ -12,7 +12,6 @@
     <div class="ddashboard-content">
       <div class="welcome-card">
         <h2>Сәлем, {{ teacherName || 'Құрметті мұғалім' }}!</h2>
-        <p>Word файлдарынан сұрақтарды автоматты түрде жүктеңіз</p>
       </div>
 
       <div v-if="!isAuthenticated" class="warning-message">
@@ -92,7 +91,7 @@
               :class="{ active: uploadType === 'word' }"
               @click.prevent="setUploadType('word')"
             >
-              <div class="upload-type-title">📄 Word документ</div>
+              <div class="upload-type-title">Word документ</div>
               <div class="upload-type-desc">Сұрақтары бар .docx файл</div>
             </div>
             <div
@@ -100,7 +99,7 @@
               :class="{ active: uploadType === 'json' }"
               @click.prevent="setUploadType('json')"
             >
-              <div class="upload-type-title">📋 JSON файл</div>
+              <div class="upload-type-title">JSON файл</div>
               <div class="upload-type-desc">Конфигурация файлы (.json)</div>
             </div>
           </div>
@@ -115,7 +114,7 @@
           >
             <div class="upload-text">Файлды осы жерге апарыңыз</div>
             <div class="upload-subtext">немесе компьютерден таңдаңыз</div>
-            <button type="button" class="browse-btn" @click.stop="triggerFileInput">📁 Файл таңдау</button>
+            <button type="button" class="browse-btn" @click.stop="triggerFileInput">🔍 Файл таңдау</button>
             <input
               type="file"
               ref="fileInput"
@@ -143,8 +142,11 @@
             <div class="preview-list">
               <div v-for="(q, idx) in parsedQuestions.slice(0, 3)" :key="idx" class="preview-item">
                 <div class="preview-number">{{ idx + 1 }}</div>
-                <div class="preview-text">{{ q.text.substring(0, 100) }}{{ q.text.length > 100 ? '...' : '' }}</div>
-                <div v-if="q.hasImage" class="preview-badge">🖼️ Сурет</div>
+                <div class="preview-content">
+                  <div class="preview-text">{{ q.text.substring(0, 100) }}{{ q.text.length > 100 ? '...' : '' }}</div>
+                  <img v-if="q.imageUrl" :src="q.imageUrl" alt="Question image" class="preview-image" />
+                </div>
+                <div v-if="q.hasImage || q.imageUrl" class="preview-badge">🖼️ Сурет</div>
               </div>
               <div v-if="parsedQuestions.length > 3" class="preview-more">
                 + тағы {{ parsedQuestions.length - 3 }} сұрақ
@@ -153,8 +155,31 @@
           </div>
 
           <!-- JSON Preview -->
-          <div v-if="uploadType === 'json' && fileContent" class="code-preview">
-            {{ fileContent.substring(0, 500) }}...
+          <div v-if="uploadType === 'json' && fileContent" class="json-preview-section">
+            <div class="preview-header">
+              <strong>JSON мазмұны:</strong>
+            </div>
+            <div class="code-preview">
+              {{ fileContent.substring(0, 500) }}...
+            </div>
+            <div v-if="getJsonQuestions().length > 0" class="word-preview" style="margin-top: 16px;">
+              <div class="preview-header">
+                <strong>Сұрақтар алдын ала қарау: {{ getJsonQuestions().length }}</strong>
+              </div>
+              <div class="preview-list">
+                <div v-for="(q, idx) in getJsonQuestions().slice(0, 3)" :key="idx" class="preview-item">
+                  <div class="preview-number">{{ idx + 1 }}</div>
+                  <div class="preview-content">
+                    <div class="preview-text">{{ q.text.substring(0, 100) }}{{ q.text.length > 100 ? '...' : '' }}</div>
+                    <img v-if="q.imageUrl" :src="q.imageUrl" alt="Question image" class="preview-image" />
+                  </div>
+                  <div v-if="q.imageUrl" class="preview-badge">🖼️ Сурет</div>
+                </div>
+                <div v-if="getJsonQuestions().length > 3" class="preview-more">
+                  + тағы {{ getJsonQuestions().length - 3 }} сұрақ
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -373,6 +398,7 @@ export default {
       const jsonContent = {
         questions: this.parsedQuestions.map(q => ({
           text: q.text,
+          imageUrl: q.imageUrl || null,
           type: q.type,
           choices: q.choices,
           correctAnswer: q.correctAnswer
@@ -384,41 +410,101 @@ export default {
 
     extractQuestions(doc) {
       const questions = [];
-      const content = doc.body.textContent || '';
       
-      // Method 1: Try numbered pattern (1. 2. 3. or 1) 2) 3))
-      const questionPattern = /(?:^|\n)\s*(\d+)[.)]\s*(.+?)(?=\n\s*\d+[.)]|\s*$)/gs;
-      const matches = [...content.matchAll(questionPattern)];
+      // Get all paragraphs from the document
+      const paragraphs = Array.from(doc.querySelectorAll('p'));
       
-      if (matches.length > 0) {
-        matches.forEach((match) => {
-          const questionText = match[2].trim();
-          if (questionText.length > 5) {
+      let currentQuestion = null;
+      let currentChoices = [];
+      let correctAnswer = '';
+      
+      for (let i = 0; i < paragraphs.length; i++) {
+        const text = paragraphs[i].textContent.trim();
+        if (!text) continue;
+        
+        console.log('Processing line:', text);
+        
+        // Check if line starts with number (e.g., "1.", "2.", "10.")
+        const questionMatch = text.match(/^(\d+)\.\s*(.+)/);
+        
+        if (questionMatch) {
+          // Save previous question if exists
+          if (currentQuestion) {
             questions.push({
-              text: questionText,
-              type: 'text-input',
-              choices: null,
-              correctAnswer: '',
+              text: currentQuestion,
+              type: currentChoices.length >= 2 ? 'multiple-choice' : 'text-input',
+              choices: currentChoices.length >= 2 ? currentChoices : null,
+              correctAnswer: correctAnswer,
               hasImage: false
             });
+            console.log('Saved question:', currentQuestion, 'with', currentChoices.length, 'choices');
           }
-        });
-      } else {
-        // Method 2: Split by paragraphs
-        const paragraphs = doc.querySelectorAll('p');
-        paragraphs.forEach((p) => {
-          const text = p.textContent.trim();
-          if (text.length > 10) {
-            questions.push({
-              text: text,
-              type: 'text-input',
-              choices: null,
-              correctAnswer: '',
-              hasImage: false
-            });
+          
+          // Start new question
+          currentQuestion = questionMatch[2].trim();
+          currentChoices = [];
+          correctAnswer = '';
+          console.log('New question found:', currentQuestion);
+          continue;
+        }
+        
+        // Check for choices (A), B), C), D))
+        const choiceMatch = text.match(/^([A-DАБВГД])\)\s*(.+)/i);
+        if (choiceMatch && currentQuestion) {
+          const choiceText = choiceMatch[2].trim();
+          currentChoices.push(choiceText);
+          console.log('Choice found:', choiceText);
+          continue;
+        }
+        
+        // Check for correct answer - try multiple patterns
+        const correctPatterns = [
+          /Дұрыс жауап:\s*([A-DАБВГД])/i,
+          /дұрыс жауап:\s*([A-DАБВГД])/i,
+          /Жауап:\s*([A-DАБВГД])/i,
+          /жауап:\s*([A-DАБВГД])/i
+        ];
+        
+        let foundCorrect = false;
+        for (const pattern of correctPatterns) {
+          const correctMatch = text.match(pattern);
+          if (correctMatch && currentQuestion) {
+            const correctLetter = correctMatch[1].toUpperCase();
+            const correctIndex = correctLetter.charCodeAt(0) - 65; // A=0, B=1, etc
+            if (correctIndex >= 0 && correctIndex < currentChoices.length) {
+              correctAnswer = currentChoices[correctIndex];
+              console.log('Correct answer found:', correctLetter, '=', correctAnswer);
+            }
+            foundCorrect = true;
+            break;
           }
-        });
+        }
+        
+        if (foundCorrect) continue;
+        
+        // If not a special line and we have a current question, append to question text
+        if (currentQuestion && 
+            !text.match(/^[A-DАБВГД]\)/i) && 
+            !text.match(/Дұрыс жауап/i) &&
+            !text.match(/дұрыс жауап/i)) {
+          currentQuestion += ' ' + text;
+          console.log('Appending to question:', text);
+        }
       }
+      
+      // Don't forget the last question
+      if (currentQuestion) {
+        questions.push({
+          text: currentQuestion,
+          type: currentChoices.length >= 2 ? 'multiple-choice' : 'text-input',
+          choices: currentChoices.length >= 2 ? currentChoices : null,
+          correctAnswer: correctAnswer,
+          hasImage: false
+        });
+        console.log('Saved last question:', currentQuestion);
+      }
+      
+      console.log('Total questions extracted:', questions.length);
       
       // Try to detect images
       const images = doc.querySelectorAll('img');
@@ -555,6 +641,16 @@ export default {
         this.isAuthenticated = false;
         if (this.$router) this.$router.push('/').catch(()=>{}); else window.location.href = '/';
       }
+    },
+
+    getJsonQuestions() {
+      if (!this.fileContent) return [];
+      try {
+        const parsed = JSON.parse(this.fileContent);
+        return parsed.questions || [];
+      } catch (e) {
+        return [];
+      }
     }
   },
 
@@ -648,9 +744,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
 .preview-list { display: flex; flex-direction: column; gap: 12px; }
 .preview-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px; background: white; border-radius: 6px; border: 1px solid #e5e5e5; }
 .preview-number { width: 32px; height: 32px; border-radius: 50%; background: #1565C0; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
-.preview-text { flex: 1; font-size: 14px; color: #0a2540; line-height: 1.5; }
-.preview-badge { background: #14bf96; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.preview-content { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.preview-text { font-size: 14px; color: #0a2540; line-height: 1.5; }
+.preview-image { max-width: 100%; height: auto; max-height: 200px; border-radius: 6px; border: 1px solid #e5e5e5; object-fit: contain; margin-top: 8px; }
+.preview-badge { background: #14bf96; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; align-self: flex-start; }
 .preview-more { text-align: center; padding: 12px; color: #697386; font-size: 14px; font-style: italic; }
+.json-preview-section { margin-bottom: 20px; }
 .code-preview { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; max-height: 250px; overflow: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; margin-bottom: 20px; }
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; margin-bottom: 8px; color: #0a2540; font-weight: 600; font-size: 14px; }
